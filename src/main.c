@@ -16,7 +16,8 @@ enum NodeState {
 
 enum MessageType {
 	leaderRequest,
-	leaderResponse
+	leaderResponse,
+	leaderHeartbeat
 };
 
 // Information about other nodes in the cluster
@@ -29,6 +30,8 @@ struct SelfNode {
 	long long ID;
 	long long timeout;
 	long long termNumber;
+
+	struct Node *leader;
 
 	// points to index of log items which have been acked by majority of cluster
 	long matchIndex;
@@ -50,6 +53,8 @@ struct Message {
 
 	// leaderResult fields
 	int ok;
+
+	// leader declaration
 };
 
 struct element {
@@ -63,18 +68,21 @@ double randUnitInterval()
     return (double)rand() / (double)RAND_MAX ;
 }
 
-void initNode(struct SelfNode *node, long long ID) {
+void initNode(struct SelfNode *node, long long ID)
+{
 	node->state = follower;
 	node->timeout = getClock() + timeoutTime * (1.5 + randUnitInterval() / 2.0);
 	node->termNumber = 0;
 	node->ID = ID;
 	node->numNodes = 0;
 	node->numVotes = 0;
+	node->leader = NULL;
 }
 
 struct element *root = NULL;
 struct element *last = NULL;
-void sendMessage(long long node, struct Message message) {
+void sendMessage(long long node, struct Message message)
+{
 	struct element *e = malloc(sizeof(struct element));
 	e->next = NULL;
 	e->nodeID = node;
@@ -94,6 +102,15 @@ void addNode(struct SelfNode *node, long long otherNodeID)
 	//assert( i < MAXNODES );
 	node->nodes[i].ID = otherNodeID;
 	node->numNodes += 1;
+}
+
+struct Node* getNode(struct SelfNode *node, long long ID)
+{
+	for( unsigned int i = 0; i < node->numNodes; i++ ) {
+		if( ID == node->nodes[i].ID )
+			return &node->nodes[i];
+	}
+	return NULL;
 }
 
 void addVotee(struct SelfNode *node, long long voteeID)
@@ -133,19 +150,32 @@ void broadcastMessage(struct SelfNode *node, struct Message message) {
 	}
 }
 
-void sendHeartBeat(struct SelfNode *node) {
-	printf("sending heartbeat\n");
+void resetTimeout(struct SelfNode *node, int heartbeat) {
+	if( heartbeat ) {
+		node->timeout = getClock() + timeoutTime;
+	} else {
+		node->timeout = getClock() + timeoutTime * (1.5 + randUnitInterval() / 2.0);
+	}
 }
 
-void resetTimeout(struct SelfNode *node) {
-	node->timeout = getClock() + timeoutTime * (1.5 + randUnitInterval() / 2.0);
+void sendHeartBeat(struct SelfNode *node) {
+	printf("%lld: sending heartbeat\n", node->ID);
+
+	struct Message response;
+	response.nodeID = node->ID;
+	response.type = leaderHeartbeat;
+	response.termNumber = node->termNumber;
+	broadcastMessage(node, response);
+
+	resetTimeout(node, 1);
 }
+
 
 void becomeCandidate(struct SelfNode *node) {
-	printf("candidate mode: %lld\n", node->timeout);
+	printf("%lld: candidate mode: %lld\n", node->ID, node->timeout);
 	node->state = candidate;
 	node->termNumber++;
-	resetTimeout(node);
+	resetTimeout(node, 0);
 
 	struct Message message;
 	message.type = leaderRequest;
@@ -156,32 +186,50 @@ void becomeCandidate(struct SelfNode *node) {
 
 void pumpNode(struct SelfNode *node) {
 	struct Message message;
-	struct Message response;
-	response.nodeID = node->ID;
 	int ok = readMessage(node->ID, &message);
 	if( ok ) {
-		printf("got message: %d\n", message.type);
 		switch( message.type ) {
 			case leaderRequest:
+				printf("%lld: got message leaderRequest from %lld\n", node->ID, message.nodeID);
+				struct Message response;
+				response.nodeID = node->ID;
 				response.type = leaderResponse;
+				response.termNumber = message.termNumber;
 				if( message.termNumber > node->termNumber ) {
 					response.ok = 1;
-					response.termNumber = message.termNumber;
 					node->termNumber = message.termNumber;
 				} else {
 					response.ok = 0;
-					response.termNumber = message.termNumber;
 				}
-				sendMessage( message.termNumber, response );
+				sendMessage( message.nodeID, response );
 				break;
 
 			case leaderResponse:
+				printf("%lld: got leaderResponse from %lld\n", node->ID, message.nodeID);
 				if( message.termNumber == node->termNumber ) {
 					if( message.ok ) {
 						addVotee( node, message.nodeID );
+						if( node->numVotes > (node->numNodes / 2 + 1) && node->state == candidate) {
+							node->state = leader;
+							sendHeartBeat(node);
+						}
 					}
 				}
 				break;
+
+			case leaderHeartbeat:
+				printf("%lld: got leaderHeartbeat from %lld\n", node->ID, message.nodeID);
+				if( message.termNumber >= node->termNumber ) {
+					node->termNumber = message.termNumber;
+					node->state = follower;
+					node->leader = getNode(node, message.nodeID);
+
+					resetTimeout(node, 0);
+				}
+				break;
+
+			default:
+				printf("%lld: got message unhandled: %d from %lld\n", node->ID, message.type, message.nodeID);
 		}
 
 	}

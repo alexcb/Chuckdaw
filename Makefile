@@ -1,6 +1,7 @@
 CC=gcc
 CCFLAGS=-g -Wall -pedantic -std=c11
 LDFLAGS=-lzmq
+TESTLDFLAGS=-lcheck -lm -lpthread -lrt
 
 TARGET=chuckdaw
 
@@ -18,7 +19,7 @@ $(TARGET): $(OBJ)
 	$(CC) $(CCFLAGS) -o $(TARGET) $^ $(LDFLAGS)
 
 test: $(TESTOBJ) $(OBJWITHOUTMAIN)
-	$(CC) $(CCFLAGS) -o test $^ $(LDFLAGS)
+	$(CC) $(CCFLAGS) -o test $^ $(LDFLAGS) $(TESTLDFLAGS)
 
 clean:
 	rm -f $(TARGET) test $(OBJ) $(TESTOBJ)
