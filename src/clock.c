@@ -6,7 +6,6 @@
 long long getClock()
 {
 	long long ms;
-	time_t s;
 	struct timespec spec;
 	
 	//TODO use CLOCK_REALTIME_RAW

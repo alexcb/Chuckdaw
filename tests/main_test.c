@@ -1,8 +1,32 @@
 #include <stdio.h>
 #include <check.h>
 
-START_TEST(test_money_create)
+#include "node.h"
+
+START_TEST(test_cluster)
 {
+	int numNodes = 10;
+	struct NodeState nodes[numNodes];
+	for( int i = 0; i < numNodes; i++ ) {
+		initNode(&nodes[i], i);
+	}
+
+	for( int i = 0; i < numNodes; i++ ) {
+		for( int j = 0; j < numNodes; j++ ) {
+			if( i != j ) {
+				addNode(&nodes[i], nodes[j].ID);
+			}
+		}
+	}
+
+	for(;;) {
+		for( int i = 0; i < numNodes; i++ ) {
+			pumpNode(&nodes[i]);
+		}
+	}
+
+
+
 	int x = 12;
 	ck_assert_int_eq(x, 5);
 }
@@ -18,7 +42,7 @@ Suite * money_suite(void)
 	/* Core test case */
 	tc_core = tcase_create("Core");
 
-	tcase_add_test(tc_core, test_money_create);
+	tcase_add_test(tc_core, test_cluster);
 	suite_add_tcase(s, tc_core);
 
 	return s;

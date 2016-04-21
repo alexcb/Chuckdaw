@@ -1,5 +1,5 @@
 CC=gcc
-CCFLAGS=-g -Wall -pedantic -std=c11
+CCFLAGS=-g -Wall -pedantic -std=gnu11 -Wall -Werror -I./src
 LDFLAGS=-lzmq
 TESTLDFLAGS=-lcheck -lm -lpthread -lrt
 
@@ -17,6 +17,10 @@ build: test $(TARGET)
 
 $(TARGET): $(OBJ)
 	$(CC) $(CCFLAGS) -o $(TARGET) $^ $(LDFLAGS)
+
+# To obtain object files
+%.o: %.c
+	$(CC) -c $(CCFLAGS) $< -o $@
 
 test: $(TESTOBJ) $(OBJWITHOUTMAIN)
 	$(CC) $(CCFLAGS) -o test $^ $(LDFLAGS) $(TESTLDFLAGS)
