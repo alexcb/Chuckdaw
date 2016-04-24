@@ -4,6 +4,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h> 
+#include <uuid/uuid.h>
 
 const long timeoutTime = 1000;
 const unsigned int maxNodes = 1024;
@@ -14,43 +16,58 @@ double randUnitInterval()
     return (double)rand() / (double)RAND_MAX ;
 }
 
-void initNode(struct NodeState *node, long long ID)
+void initNode(struct NodeState *node, uuid_t ID)
 {
-	node->state = follower;
-	node->timeout = getClock() + timeoutTime * (1.5 + randUnitInterval() / 2.0);
-	node->termNumber = 0;
-	node->ID = ID;
-	node->numNodes = 0;
-	node->numVotes = 0;
-	node->leader = NULL;
+	//node->state = follower;
+	//node->timeout = getClock() + timeoutTime * (1.5 + randUnitInterval() / 2.0);
+	//node->termNumber = 0;
+	////node->self->ID = ID;
+	//node->numNodes = 0;
+	//node->numVotes = 0;
+	//node->leader = NULL;
 }
 
-void addNode(struct NodeState *node, long long otherNodeID)
+
+void bootstrapNode(struct NodeState *node, int numNodes)
+{
+	memset(node, 0, sizeof(struct NodeState));
+	node->state = bootstrap;
+	node->expectedNumInitialNodes = numNodes;
+	node->self = &node->nodes[0];
+	uuid_generate(node->self->ID);
+}
+
+void connectNode(struct NodeState *node, uuid_t otherNode)
+{
+	//TODO send message
+}
+
+void addNode(struct NodeState *node, uuid_t otherNodeID)
 {
 	unsigned int i = node->numNodes;
 	//assert( i < MAXNODES );
-	node->nodes[i].ID = otherNodeID;
+	uuid_copy(node->nodes[i].ID, otherNodeID);
 	node->numNodes += 1;
 }
 
-struct Node* getNode(struct NodeState *node, long long ID)
+struct Node* getNode(struct NodeState *node, uuid_t ID)
 {
 	for( unsigned int i = 0; i < node->numNodes; i++ ) {
-		if( ID == node->nodes[i].ID )
+		if( uuid_compare(ID, node->nodes[i].ID) == 0 )
 			return &node->nodes[i];
 	}
 	return NULL;
 }
 
-void addVotee(struct NodeState *node, long long voteeID)
+void addVotee(struct NodeState *node, uuid_t voteeID)
 {
 	for( unsigned int i = 0; i < node->numVotes; i++ ) {
-		if( voteeID == node->votees[i] )
+		if( uuid_compare(voteeID, node->votees[i]) == 0 )
 			return;
 	}
 	unsigned int i = node->numVotes;
 	//assert( i < MAXNODES );
-	node->votees[i] = voteeID;
+	uuid_copy( node->votees[i], voteeID);
 	node->numVotes += 1;
 }
 
@@ -71,10 +88,10 @@ void broadcastMessage(struct NodeState *node, struct Message message) {
 
 
 void sendHeartBeat(struct NodeState *node) {
-	printf("%lld: sending heartbeat\n", node->ID);
+	//printf("%lld: sending heartbeat\n", node->self->ID);
 
 	struct Message response;
-	response.nodeID = node->ID;
+	uuid_copy(response.nodeID, node->self->ID);
 	response.type = leaderHeartbeat;
 	response.termNumber = node->termNumber;
 	broadcastMessage(node, response);
@@ -84,27 +101,27 @@ void sendHeartBeat(struct NodeState *node) {
 
 
 void becomeCandidate(struct NodeState *node) {
-	printf("%lld: candidate mode: %lld\n", node->ID, node->timeout);
+	//printf("%lld: candidate mode: %lld\n", node->self->ID, node->timeout);
 	node->state = candidate;
 	node->termNumber++;
 	resetTimeout(node, 0);
 
 	struct Message message;
 	message.type = leaderRequest;
-	message.nodeID = node->ID;
+	uuid_copy(message.nodeID, node->self->ID);
 	message.termNumber = node->termNumber;
 	broadcastMessage(node, message);
 }
 
 void pumpNode(struct NodeState *node) {
 	struct Message message;
-	int ok = readMessage(node->ID, &message);
+	int ok = readMessage(node->self->ID, &message);
+	struct Message response;
 	if( ok ) {
 		switch( message.type ) {
 			case leaderRequest:
-				printf("%lld: got message leaderRequest from %lld\n", node->ID, message.nodeID);
-				struct Message response;
-				response.nodeID = node->ID;
+				//printf("%lld: got message leaderRequest from %lld\n", node->self->ID, message.nodeID);
+				uuid_copy(response.nodeID, node->self->ID);
 				response.type = leaderResponse;
 				response.termNumber = message.termNumber;
 				if( message.termNumber > node->termNumber ) {
@@ -117,7 +134,7 @@ void pumpNode(struct NodeState *node) {
 				break;
 
 			case leaderResponse:
-				printf("%lld: got leaderResponse from %lld\n", node->ID, message.nodeID);
+				//printf("%lld: got leaderResponse from %lld\n", node->self->ID, message.nodeID);
 				if( message.termNumber == node->termNumber ) {
 					if( message.ok ) {
 						addVotee( node, message.nodeID );
@@ -130,7 +147,7 @@ void pumpNode(struct NodeState *node) {
 				break;
 
 			case leaderHeartbeat:
-				printf("%lld: got leaderHeartbeat from %lld\n", node->ID, message.nodeID);
+				//printf("%lld: got leaderHeartbeat from %lld\n", node->self->ID, message.nodeID);
 				if( message.termNumber >= node->termNumber ) {
 					node->termNumber = message.termNumber;
 					node->state = follower;
@@ -141,13 +158,18 @@ void pumpNode(struct NodeState *node) {
 				break;
 
 			default:
-				printf("%lld: got message unhandled: %d from %lld\n", node->ID, message.type, message.nodeID);
+				//printf("%lld: got message unhandled: %d from %lld\n", node->self->ID, message.type, message.nodeID);
+				break;
 		}
 
 	}
 
 	if( node->timeout < getClock() ) {
 		switch( node->state ) {
+			case bootstrap:
+				//TODO
+				//becomeCandidate(node);
+				break;
 			case follower:
 				becomeCandidate(node);
 				break;

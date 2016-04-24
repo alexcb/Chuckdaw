@@ -3,7 +3,7 @@
 
 struct element {
 	struct element *next;
-	long long nodeID;
+	uuid_t nodeID;
 	struct Message message;
 };
 
@@ -11,10 +11,10 @@ struct element {
 struct element *root = NULL;
 struct element *last = NULL;
 
-int readMessage(long long node, struct Message *message) {
+int readMessage(uuid_t node, struct Message *message) {
 	struct element *prev = NULL;
 	for( struct element *p = root; p != NULL; p = p->next ) {
-		if( p->nodeID == node ) {
+		if( uuid_compare(p->nodeID, node) == 0 ) {
 			*message = p->message;
 			if( prev == NULL ) {
 				root = p->next;
@@ -29,11 +29,11 @@ int readMessage(long long node, struct Message *message) {
 	return 0;
 }
 
-void sendMessage(long long node, struct Message message)
+void sendMessage(uuid_t node, struct Message message)
 {
 	struct element *e = malloc(sizeof(struct element));
 	e->next = NULL;
-	e->nodeID = node;
+	uuid_copy(e->nodeID, node);
 	e->message = message;
 	if( root == NULL ) {
 		last = root = e;

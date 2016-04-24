@@ -1,4 +1,5 @@
 #pragma once
+#include <uuid/uuid.h>
 
 enum MessageType {
 	leaderRequest,
@@ -8,7 +9,7 @@ enum MessageType {
 
 
 struct Message {
-	long long nodeID;
+	uuid_t nodeID;
 	long long termNumber;
 	enum MessageType type;
 
@@ -18,5 +19,5 @@ struct Message {
 	// leader declaration
 };
 
-int readMessage(long long node, struct Message *message);
-void sendMessage(long long node, struct Message message);
+int readMessage(uuid_t node, struct Message *message);
+void sendMessage(uuid_t node, struct Message message);

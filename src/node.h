@@ -1,8 +1,10 @@
 #pragma once
+#include <uuid/uuid.h>
 
 #define MAXNODES 1024
 
 enum NodeStateEnum {
+	bootstrap,
 	follower,
 	candidate,
 	leader
@@ -10,17 +12,17 @@ enum NodeStateEnum {
 
 // Information about other nodes in the cluster
 struct Node {
-	long long ID;
+	uuid_t ID;
 };
 
 // Each node has it's own state
 // this state is not shared between nodes
 struct NodeState {
 	enum NodeStateEnum state;
-	long long ID;
 	long long timeout;
 	long long termNumber;
 
+	struct Node *self;
 	struct Node *leader;
 
 	// points to index of log items which have been acked by majority of cluster
@@ -33,10 +35,14 @@ struct NodeState {
 	struct Node nodes[MAXNODES];
 
 	unsigned int numVotes;
-	long long votees[MAXNODES];
+	uuid_t votees[MAXNODES];
+
+	unsigned int expectedNumInitialNodes;
 };
 
 
-void initNode(struct NodeState *node, long long ID);
+void connectNode(struct NodeState *node, uuid_t otherNode);
+void bootstrapNode(struct NodeState *node, int numNodes);
+void initNode(struct NodeState *node, uuid_t ID);
 void pumpNode(struct NodeState *node);
-void addNode(struct NodeState *node, long long otherNodeID);
+void addNode(struct NodeState *node, uuid_t otherNodeID);
