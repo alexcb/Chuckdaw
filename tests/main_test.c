@@ -54,16 +54,11 @@ START_TEST(test_cluster)
 		ck_abort_msg("not all messages were consumed");
 	}
 
-	if( nodes[0].leader == NULL ) {
-		ck_abort_msg("no leader elected after pumping");
-	}
-
 	for( int i = 0; i < numNodes; i++ ) {
 		uuid_to_string(nodeID, nodes[i].self->ID)
 		uuid_to_string(leaderID, nodes[i].leader->ID)
 		printf("%s: leader for term %lld is %s\n", nodeID, nodes[i].termNumber, leaderID );
-	}
-	for( int i = 0; i < numNodes; i++ ) {
+
 		ck_assert_msg( nodes[i].termNumber == nodes[0].termNumber, "bad term number for node %d", i );
 		ck_assert_msg( nodes[i].leader != NULL, "no leader for node %d", i );
 		ck_assert_msg( uuid_compare( nodes[i].leader->ID, nodes[0].leader->ID) == 0, "leader missmatch %d", i );
