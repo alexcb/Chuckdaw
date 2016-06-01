@@ -6,12 +6,12 @@
 #include "clock.h"
 #include "uuid_util.h"
 
-void pumpNodes( int numNodes, struct NodeState *nodes, int numPumps, long long addClockValue )
+void pumpNodes( int numNodes, struct NodeState *nodes[], int numPumps, long long addClockValue )
 {
 	while( numPumps-- > 0 ) {
 		for( int j = 0; j < 100; j++ ) {
 			for( int i = 0; i < numNodes; i++ ) {
-				pumpNode(&nodes[i]);
+				pumpNode(nodes[i]);
 			}
 		}
 		if( addClockValue ) {
@@ -22,16 +22,23 @@ void pumpNodes( int numNodes, struct NodeState *nodes, int numPumps, long long a
 
 START_TEST(test_cluster)
 {
+	setClock(0);
+
 	int numNodes = 10;
 	struct NodeState nodes[numNodes];
 	for( int i = 0; i < numNodes; i++ ) {
 		bootstrapNode( &nodes[i], numNodes );
 	}
 
+	struct NodeState *nodesToPump[numNodes];
+	for( int i = 0; i < numNodes; i++ ) {
+		nodesToPump[i] = &nodes[i];
+	}
+
 	// tell other nodes about node[0]
 	for( int i = 1; i < numNodes - 1; i++ ) {
 		joinCluster( &nodes[i], nodes[0].self->ID );
-		pumpNodes( numNodes, nodes, 10, 0 );
+		pumpNodes( numNodes, nodesToPump, 10, 0 );
 	}
 
 	// ensure no leaders have been elected as the numNodes bootstrap has not yet been reached
@@ -44,16 +51,17 @@ START_TEST(test_cluster)
 	// add final node
 	joinCluster( &nodes[numNodes-1], nodes[0].self->ID );
 
-	pumpNodes( numNodes, nodes, 50, timeoutTime / 10 );
+	pumpNodes( numNodes, nodesToPump, 50, timeoutTime / 10 );
 	
 	// extra pumps to clear up unhandled messages that may have just fired due to a timeout
-	pumpNodes( numNodes, nodes, 50, 0 );
+	pumpNodes( numNodes, nodesToPump, 50, 0 );
 	
 
 	if( numMessages() != 0 ) {
 		ck_abort_msg("not all messages were consumed");
 	}
 
+	printf("== Checking that a leader was elected ==\n" );
 	for( int i = 0; i < numNodes; i++ ) {
 		uuid_to_string(nodeID, nodes[i].self->ID)
 		uuid_to_string(leaderID, nodes[i].leader->ID)
@@ -63,6 +71,19 @@ START_TEST(test_cluster)
 		ck_assert_msg( nodes[i].leader != NULL, "no leader for node %d", i );
 		ck_assert_msg( uuid_compare( nodes[i].leader->ID, nodes[0].leader->ID) == 0, "leader missmatch %d", i );
 	}
+
+	// Stop pumping leader node
+	uuid_to_string(leaderID, nodes[0].leader->ID)
+	printf("== Removing node %s ==\n", leaderID );
+	int numNodesToPump = 0;
+	for( int i = 0; i < numNodes; i++ ) {
+		if( uuid_compare( nodes[0].leader->ID, nodes[i].self->ID) != 0 ) {
+			nodesToPump[numNodesToPump++] = &nodes[i];
+		}
+	}
+	pumpNodes( numNodes, nodesToPump, 50, timeoutTime / 10 );
+	pumpNodes( numNodes, nodesToPump, 50, 0 );
+
 }
 END_TEST
 

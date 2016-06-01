@@ -3,6 +3,7 @@
 #include "clock.h"
 #include "consts.h"
 #include "uuid_util.h"
+#include "logger.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -43,13 +44,11 @@ void bootstrapNode(struct NodeState *node, int numNodes)
 	node->numNodes = 1;
 	uuid_generate(node->self->ID);
 
-	uuid_to_string(uuid_str, node->self->ID)
-	printf("%s: Bootstrap complete\n", uuid_str);
+	NODE_DEBUG(node, "Bootstrap complete");
 }
 
 void addNode(struct NodeState *node, uuid_t otherNode)
 {
-	uuid_to_string(uuid_str, node->self->ID)
 	uuid_to_string(other_uuid_str, otherNode)
 
 	// ignore nodes we already know about
@@ -57,7 +56,7 @@ void addNode(struct NodeState *node, uuid_t otherNode)
 		return;
 	}
 
-	printf("%s: Adding node %s to list of known nodes\n", uuid_str, other_uuid_str);
+	NODE_DEBUG(node, "Adding node %s to list of known nodes", other_uuid_str);
 	uuid_copy(node->nodes[node->numNodes].ID, otherNode);
 	node->numNodes += 1;
 }
@@ -67,9 +66,8 @@ void addNode(struct NodeState *node, uuid_t otherNode)
 // the node will then broadcast a clusterMembershipUpdate
 void joinCluster(struct NodeState *node, uuid_t otherNode)
 {
-	uuid_to_string(uuid_str, node->self->ID)
 	uuid_to_string(other_uuid_str, otherNode)
-	printf("%s: Attempting to join with node %s\n", uuid_str, other_uuid_str);
+	NODE_DEBUG(node, "Attempting to join with node %s", other_uuid_str);
 
 	addNode( node, otherNode );
 
@@ -82,9 +80,8 @@ void joinCluster(struct NodeState *node, uuid_t otherNode)
 
 void handleJoinRequest(struct NodeState *node, struct Message *message)
 {
-	uuid_to_string( uuid_str, node->self->ID )
 	uuid_to_string( message_node_uuid_str, message->nodeID )
-	printf("%s: got message joinRequest from %s\n", uuid_str, message_node_uuid_str);
+	NODE_DEBUG(node, "got message joinRequest from %s", message_node_uuid_str);
 
 	addNode( node, message->nodeID );
 	boardcastNodeMembers( node );
@@ -92,21 +89,19 @@ void handleJoinRequest(struct NodeState *node, struct Message *message)
 
 void handleClusterMembershipUpdate(struct NodeState *node, struct Message *message)
 {
-	uuid_to_string(uuid_str, node->self->ID)
 	uuid_to_string(message_node_uuid_str, message->nodeID)
-	printf("%s: got message clusterMembershipUpdate from %s\n", uuid_str, message_node_uuid_str);
+	NODE_DEBUG(node, "got message clusterMembershipUpdate from %s", message_node_uuid_str);
 
 	for( int i = 0; i < message->numNodes; i++ ) {
 		addNode( node, message->nodes[i] );
 	}
-	printf("%s: total known nodes: %d\n", uuid_str, node->numNodes);
+	NODE_DEBUG(node, "total known nodes: %d", node->numNodes);
 }
 
 void handleLeaderRequest(struct NodeState *node, struct Message *message)
 {
-	uuid_to_string(uuid_str, node->self->ID)
 	uuid_to_string(message_node_uuid_str, message->nodeID)
-	printf("%s: got leaderRequest from %s\n", uuid_str, message_node_uuid_str);
+	NODE_DEBUG(node, "got leaderRequest from %s", message_node_uuid_str);
 
 	//if( node->state == bootstrap ) {
 	//	node->state = follower;
@@ -119,19 +114,18 @@ void handleLeaderRequest(struct NodeState *node, struct Message *message)
 	if( message->termNumber > node->termNumber ) {
 		response.ok = 1;
 		node->termNumber = message->termNumber;
-		printf("%s: voting for %s in term %lld\n", uuid_str, message_node_uuid_str, node->termNumber);
+		NODE_DEBUG(node, "voting for %s in term %lld", message_node_uuid_str, node->termNumber);
 	} else {
 		response.ok = 0;
-		printf("%s: voting against %s in term %lld\n", uuid_str, message_node_uuid_str, node->termNumber);
+		NODE_DEBUG(node, "voting against %s in term %lld", message_node_uuid_str, node->termNumber);
 	}
 	sendMessage( message->nodeID, response );
 }
 
 void handleLeaderResponse(struct NodeState *node, struct Message *message)
 {
-	uuid_to_string(uuid_str, node->self->ID)
 	uuid_to_string(message_node_uuid_str, message->nodeID)
-	printf("%s: got leaderResponse from %s for term: %lld\n", uuid_str, message_node_uuid_str, message->termNumber);
+	NODE_DEBUG(node, "got leaderResponse from %s for term: %lld", message_node_uuid_str, message->termNumber);
 
 	if( message->termNumber == node->termNumber ) {
 		if( message->ok ) {
@@ -139,7 +133,7 @@ void handleLeaderResponse(struct NodeState *node, struct Message *message)
 			if( node->numVotes > (node->numNodes / 2 + 1) && node->state == candidate) {
 				node->state = leader;
 				node->leader = node->self;
-				printf("%s: declaring self winner for term %lld\n", uuid_str, node->termNumber);
+				NODE_DEBUG(node, "declaring self winner for term %lld", node->termNumber);
 				sendHeartBeat(node);
 			}
 		}
@@ -148,12 +142,11 @@ void handleLeaderResponse(struct NodeState *node, struct Message *message)
 
 void handleLeaderHeartbeat(struct NodeState *node, struct Message *message)
 {
-	uuid_to_string(uuid_str, node->self->ID)
 	uuid_to_string(message_node_uuid_str, message->nodeID)
-	printf("%s: got leaderHeartbeat from %s\n", uuid_str, message_node_uuid_str);
+	NODE_DEBUG(node, "got leaderHeartbeat from %s", message_node_uuid_str);
 
 	if( message->termNumber >= node->termNumber ) {
-		printf("%s: setting leader to %s for term %lld\n", uuid_str, message_node_uuid_str, message->termNumber);
+		NODE_DEBUG(node, "setting leader to %s for term %lld", message_node_uuid_str, message->termNumber);
 		node->termNumber = message->termNumber;
 		node->state = follower;
 		node->leader = getNode(node, message->nodeID);
@@ -205,8 +198,7 @@ void broadcastMessage(struct NodeState *node, struct Message message) {
 
 
 void sendHeartBeat(struct NodeState *node) {
-	uuid_to_string(uuid_str, node->self->ID)
-	printf("%s: sending heartbeat\n", uuid_str);
+	NODE_DEBUG(node, "sending heartbeat");
 
 	struct Message response;
 	uuid_copy(response.nodeID, node->self->ID);
@@ -219,10 +211,9 @@ void sendHeartBeat(struct NodeState *node) {
 
 
 void becomeCandidate(struct NodeState *node) {
-	uuid_to_string(uuid_str, node->self->ID)
 	node->state = candidate;
 	node->termNumber++;
-	printf("%s: candidate mode, timeout val: %lld, term number: %lld\n", uuid_str, node->timeout, node->termNumber);
+	NODE_DEBUG(node, "candidate mode, timeout val: %lld, term number: %lld", node->timeout, node->termNumber);
 
 	struct Message message;
 	message.type = leaderRequest;
@@ -232,8 +223,7 @@ void becomeCandidate(struct NodeState *node) {
 }
 
 void boardcastNodeMembers(struct NodeState *node) {
-	uuid_to_string(uuid_str, node->self->ID)
-	printf("%s: broadcasting known nodes\n", uuid_str);
+	NODE_DEBUG(node, "broadcasting known nodes");
 
 	struct Message message;
 	uuid_copy( message.nodeID, node->self->ID );
@@ -249,7 +239,6 @@ void boardcastNodeMembers(struct NodeState *node) {
 void pumpNode(struct NodeState *node) {
 	struct Message message;
 	int ok = readMessage(node->self->ID, &message);
-	uuid_to_string(uuid_str, node->self->ID)
 	uuid_to_string(message_node_uuid_str, message.nodeID)
 	if( ok ) {
 		switch( message.type ) {
@@ -274,14 +263,14 @@ void pumpNode(struct NodeState *node) {
 				break;
 
 			default:
-				printf("%s: got message unhandled: %d from %s\n", uuid_str, message.type, message_node_uuid_str);
+				NODE_DEBUG(node, "got message unhandled: %d from %s", message.type, message_node_uuid_str);
 				break;
 		}
 
 	}
 
 	if( node->timeout < getClock() ) {
-		printf("%s: timeout\n", uuid_str);
+		NODE_DEBUG(node, "timeout");
 		switch( node->state ) {
 			case bootstrap:
 				if( node-> numNodes == node->expectedNumInitialNodes ) {
