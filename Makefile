@@ -1,7 +1,7 @@
 CC=gcc
 CCFLAGS=-g -Wall -pedantic -std=gnu11 -Wall -Werror -I./src
 LDFLAGS=-lzmq -luuid
-TESTLDFLAGS=-lcheck -lm -lpthread -lrt
+TESTLDFLAGS=-lcheck -lm -lpthread -lrt -lsubunit
 
 TARGET=chuckdaw
 

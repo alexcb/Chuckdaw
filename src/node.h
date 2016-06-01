@@ -41,8 +41,10 @@ struct NodeState {
 };
 
 
-void connectNode(struct NodeState *node, uuid_t otherNode);
 void bootstrapNode(struct NodeState *node, int numNodes);
 void initNode(struct NodeState *node, uuid_t ID);
 void pumpNode(struct NodeState *node);
 void addNode(struct NodeState *node, uuid_t otherNodeID);
+void joinCluster(struct NodeState *node, uuid_t otherNode);
+struct Node* getNode(struct NodeState *node, uuid_t ID);
+

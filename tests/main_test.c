@@ -2,42 +2,72 @@
 #include <check.h>
 
 #include "node.h"
+#include "message.h"
+#include "clock.h"
+#include "uuid_util.h"
+
+void pumpNodes( int numNodes, struct NodeState *nodes, int numPumps, long long addClockValue )
+{
+	while( numPumps-- > 0 ) {
+		for( int j = 0; j < 100; j++ ) {
+			for( int i = 0; i < numNodes; i++ ) {
+				pumpNode(&nodes[i]);
+			}
+		}
+		if( addClockValue ) {
+			addClock( addClockValue );
+		}
+	}
+}
 
 START_TEST(test_cluster)
 {
 	int numNodes = 10;
 	struct NodeState nodes[numNodes];
 	for( int i = 0; i < numNodes; i++ ) {
-		bootstrapNode(&nodes[i], numNodes);
-		//initNode(&nodes[i], i);
+		bootstrapNode( &nodes[i], numNodes );
 	}
 
-	for( int i = 1; i < numNodes; i++ ) {
-		connectNode(&nodes[i], nodes[i].self->ID);
+	// tell other nodes about node[0]
+	for( int i = 1; i < numNodes - 1; i++ ) {
+		joinCluster( &nodes[i], nodes[0].self->ID );
+		pumpNodes( numNodes, nodes, 10, 0 );
 	}
 
-	int max_pumps = 1000;
-	for(int pumps_left = max_pumps;;pumps_left--) {
-		for( int i = 0; i < numNodes; i++ ) {
-			pumpNode(&nodes[i]);
-		}
-		if( nodes[0].leader ) {
-			break;
-		}
-		if( pumps_left == 0 ) {
-			ck_abort_msg("no leader elected after %d pumps", max_pumps);
-		}
+	// ensure no leaders have been elected as the numNodes bootstrap has not yet been reached
+	for( int i = 0; i < numNodes - 1; i++ ) {
+		ck_assert_msg( nodes[i].termNumber == 0, "bad term number for node %d", i );
+		ck_assert_msg( nodes[i].leader == NULL, "leader exists for node %d", i );
+		ck_assert_msg( nodes[i].state == bootstrap, "bad state for node %d", i );
+	}
+
+	// add final node
+	joinCluster( &nodes[numNodes-1], nodes[0].self->ID );
+
+	pumpNodes( numNodes, nodes, 50, timeoutTime / 10 );
+	
+	// extra pumps to clear up unhandled messages that may have just fired due to a timeout
+	pumpNodes( numNodes, nodes, 50, 0 );
+	
+
+	if( numMessages() != 0 ) {
+		ck_abort_msg("not all messages were consumed");
+	}
+
+	if( nodes[0].leader == NULL ) {
+		ck_abort_msg("no leader elected after pumping");
 	}
 
 	for( int i = 0; i < numNodes; i++ ) {
-		ck_assert( uuid_compare( nodes[i].leader->ID, nodes[0].leader->ID ) );
+		uuid_to_string(nodeID, nodes[i].self->ID)
+		uuid_to_string(leaderID, nodes[i].leader->ID)
+		printf("%s: leader for term %lld is %s\n", nodeID, nodes[i].termNumber, leaderID );
 	}
-
-
-
-
-	int x = 12;
-	ck_assert_int_eq(x, 5);
+	for( int i = 0; i < numNodes; i++ ) {
+		ck_assert_msg( nodes[i].termNumber == nodes[0].termNumber, "bad term number for node %d", i );
+		ck_assert_msg( nodes[i].leader != NULL, "no leader for node %d", i );
+		ck_assert_msg( uuid_compare( nodes[i].leader->ID, nodes[0].leader->ID) == 0, "leader missmatch %d", i );
+	}
 }
 END_TEST
 

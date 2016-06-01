@@ -2,9 +2,16 @@
 
 #include <time.h>
 #include <unistd.h>
+#include <stdbool.h>
+
+bool stubClock = false;
+long long stubClockTime = 0;
 
 long long getClock()
 {
+	if( stubClock ) {
+		return stubClockTime;
+	}
 	long long ms;
 	struct timespec spec;
 	
@@ -15,3 +22,23 @@ long long getClock()
 	return ms;
 }
 
+void setClock(long long value)
+{
+	stubClock = true;
+	stubClockTime = value;
+}
+
+void addClock(long long value)
+{
+	if( !stubClock ) {
+		stubClockTime = getClock();
+		stubClock = true;
+	}
+	stubClockTime += value;
+}
+
+void resetClock()
+{
+	stubClock = false;
+	stubClockTime = 0;
+}

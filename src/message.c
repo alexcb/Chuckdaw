@@ -29,11 +29,11 @@ int readMessage(uuid_t node, struct Message *message) {
 	return 0;
 }
 
-void sendMessage(uuid_t node, struct Message message)
+void sendMessage(uuid_t to_node, struct Message message)
 {
 	struct element *e = malloc(sizeof(struct element));
 	e->next = NULL;
-	uuid_copy(e->nodeID, node);
+	uuid_copy(e->nodeID, to_node);
 	e->message = message;
 	if( root == NULL ) {
 		last = root = e;
@@ -44,3 +44,11 @@ void sendMessage(uuid_t node, struct Message message)
 
 }
 
+int numMessages()
+{
+	int num = 0;
+	for( struct element *p = root; p != NULL; p = p->next ) {
+		num++;
+	}
+	return num;
+}

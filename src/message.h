@@ -1,7 +1,10 @@
 #pragma once
+#include "consts.h"
 #include <uuid/uuid.h>
 
 enum MessageType {
+	joinRequest,
+	clusterMembershipUpdate,
 	leaderRequest,
 	leaderResponse,
 	leaderHeartbeat
@@ -16,8 +19,11 @@ struct Message {
 	// leaderResult fields
 	int ok;
 
-	// leader declaration
+	// clusterMembershipUpdate
+	uuid_t nodes[maxNodes];
+	int numNodes;
 };
 
 int readMessage(uuid_t node, struct Message *message);
 void sendMessage(uuid_t node, struct Message message);
+int numMessages();
